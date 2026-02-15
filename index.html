@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>99 撲克牌遊戲</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans TC',sans-serif;background:#1a6b3c;min-height:100vh;overflow-x:hidden;color:#fff}
+.felt{background:radial-gradient(ellipse at center,#2d8a4e 0%,#1a6b3c 60%,#145a30 100%);min-height:100vh;display:flex;flex-direction:column}
+/* Top bar */
+.top-bar{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:rgba(0,0,0,0.3)}
+.top-bar h1{font-size:1.1rem;font-weight:700}
+.top-bar .controls{display:flex;gap:8px}
+.btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;padding:6px 14px;border-radius:8px;cursor:pointer;font-family:inherit;font-size:0.85rem;transition:all 0.2s}
+.btn:hover{background:rgba(255,255,255,0.25)}
+.btn.active{background:rgba(255,255,255,0.3);border-color:#fff}
+/* Game area */
+.game-area{flex:1;display:flex;flex-direction:column;padding:8px;gap:6px;max-width:800px;width:100%;margin:0 auto}
+/* Player zones */
+.player-zone{display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px;border-radius:12px;transition:opacity 0.5s}
+.player-zone.eliminated{opacity:0.35;filter:grayscale(0.8)}
+.player-label{font-size:0.8rem;font-weight:500;display:flex;align-items:center;gap:6px}
+.player-label .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.dot.active{background:#4ade80;box-shadow:0 0 6px #4ade80}
+.dot.waiting{background:#666}
+.dot.dead{background:#ef4444}
+/* Hand */
+.hand{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;min-height:80px;align-items:center}
+/* Cards */
+.card{width:56px;height:80px;border-radius:8px;position:relative;transition:transform 0.2s,box-shadow 0.2s;cursor:default;flex-shrink:0}
+.card-front{background:#fff;border:1px solid #ddd;display:flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.card-back{background:linear-gradient(135deg,#1e40af,#3b82f6);border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+.card-back::after{content:'';position:absolute;inset:4px;border:1px solid rgba(255,255,255,0.3);border-radius:5px}
+.card-front .rank{font-size:1.3rem;font-weight:900;line-height:1}
+.card-front .suit{font-size:1rem;line-height:1}
+.card-front.red{color:#dc2626}
+.card-front.black{color:#1a1a1a}
+.player-hand .card{cursor:pointer}
+.player-hand .card:hover{transform:translateY(-8px);box-shadow:0 8px 20px rgba(0,0,0,0.3)}
+.player-hand .card:active{transform:translateY(-4px)}
+/* Center */
+.center-area{display:flex;align-items:center;justify-content:center;gap:20px;padding:10px 0;flex-shrink:0}
+.total-display{text-align:center}
+.total-number{font-size:3.5rem;font-weight:900;text-shadow:0 2px 10px rgba(0,0,0,0.3);transition:color 0.3s}
+.total-number.danger{color:#fbbf24}
+.total-number.critical{color:#ef4444;animation:pulse 0.8s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+.total-label{font-size:0.75rem;opacity:0.7;margin-top:-4px}
+.played-area{width:70px;height:100px;border:2px dashed rgba(255,255,255,0.3);border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative}
+.played-area .card{position:absolute}
+.deck{width:60px;height:85px;background:linear-gradient(135deg,#1e40af,#3b82f6);border:2px solid #fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;box-shadow:3px 3px 0 rgba(0,0,0,0.2)}
+/* Log */
+.log-area{background:rgba(0,0,0,0.25);border-radius:8px;padding:8px 12px;max-height:80px;overflow-y:auto;font-size:0.78rem;line-height:1.6;margin-top:auto}
+.log-area::-webkit-scrollbar{width:4px}
+.log-area::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.3);border-radius:2px}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity 0.2s}
+.modal-overlay.show{opacity:1;pointer-events:auto}
+.modal{background:#fff;color:#333;border-radius:16px;padding:24px;text-align:center;min-width:260px;box-shadow:0 20px 60px rgba(0,0,0,0.4)}
+.modal h3{margin-bottom:12px;font-size:1.1rem}
+.modal .choices{display:flex;gap:10px;justify-content:center}
+.modal .choice-btn{padding:12px 24px;border:2px solid #ddd;background:#fff;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;transition:all 0.2s;font-family:inherit}
+.modal .choice-btn:hover{border-color:#3b82f6;background:#eff6ff}
+/* Game over */
+.game-over-modal .modal{background:linear-gradient(135deg,#1a6b3c,#2d8a4e);color:#fff}
+.game-over-modal .modal h2{font-size:1.5rem;margin-bottom:8px}
+/* Setup */
+.setup-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:20px;padding:20px}
+.setup-screen h1{font-size:2rem;font-weight:900}
+.setup-screen .subtitle{opacity:0.8;font-size:0.9rem}
+.mode-buttons{display:flex;gap:12px;margin-top:10px}
+.mode-btn{padding:16px 28px;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.4);color:#fff;border-radius:12px;font-size:1.1rem;font-weight:700;cursor:pointer;transition:all 0.2s;font-family:inherit}
+.mode-btn:hover{background:rgba(255,255,255,0.2);transform:translateY(-2px)}
+/* Responsive */
+@media(max-width:480px){
+  .card{width:48px;height:68px}
+  .card-front .rank{font-size:1.1rem}
+  .card-front .suit{font-size:0.85rem}
+  .total-number{font-size:2.8rem}
+  .center-area{gap:12px}
+  .hand{gap:4px}
+}
+/* Card animation */
+.card.card-played{animation:flyOut 0.4s ease-out}
+@keyframes flyOut{0%{transform:scale(1)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+/* Direction indicator */
+.direction{font-size:1.2rem;opacity:0.6}
+/* Target selection modal */
+.target-choices{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.target-btn{padding:10px 20px;border:2px solid #ddd;background:#fff;border-radius:10px;font-size:0.95rem;font-weight:600;cursor:pointer;transition:all 0.2s;font-family:inherit}
+.target-btn:hover{border-color:#3b82f6;background:#eff6ff}
+</style>
+</head>
+<body>
+<div class="felt" id="app"></div>
+
+<div class="modal-overlay" id="choiceModal">
+  <div class="modal">
+    <h3 id="choiceTitle"></h3>
+    <div class="choices" id="choiceButtons"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="targetModal">
+  <div class="modal">
+    <h3>指定下一位出牌玩家</h3>
+    <div class="target-choices" id="targetButtons"></div>
+  </div>
+</div>
+
+<div class="modal-overlay game-over-modal" id="gameOverModal">
+  <div class="modal">
+    <h2 id="gameOverText"></h2>
+    <p id="gameOverSub" style="margin-bottom:16px;opacity:0.8"></p>
+    <button class="btn" onclick="showSetup()" style="background:rgba(255,255,255,0.2);padding:10px 24px;font-size:1rem">再來一局</button>
+  </div>
+</div>
+
+<script>
+// Audio
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx;
+function playSound(freq, dur) {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.connect(g); g.connect(audioCtx.destination);
+  o.frequency.value = freq;
+  o.type = 'sine';
+  g.gain.setValueAtTime(0.1, audioCtx.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+  o.start(); o.stop(audioCtx.currentTime + dur);
+}
+function sfxPlay() { playSound(800, 0.1); }
+function sfxBust() { playSound(200, 0.4); }
+function sfxWin() { playSound(523, 0.15); setTimeout(() => playSound(659, 0.15), 150); setTimeout(() => playSound(784, 0.3), 300); }
+
+// Game state
+let G = {};
+const SUITS = ['\u2660','\u2665','\u2666','\u2663'];
+const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const NAMES = ['你','電腦 A','電腦 B','電腦 C'];
+
+function isRed(suit) { return suit === '\u2665' || suit === '\u2666'; }
+
+function makeDeck() {
+  const d = [];
+  for (const s of SUITS) for (const r of RANKS) d.push({suit: s, rank: r});
+  // shuffle
+  for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i+1)); [d[i],d[j]] = [d[j],d[i]]; }
+  return d;
+}
+
+function cardValue(rank) {
+  if (rank === 'A') return 1;
+  if (rank === 'K') return 99;
+  if (rank === 'J' || rank === 'Q') return 0;
+  return parseInt(rank);
+}
+
+function startGame(numPlayers) {
+  const deck = makeDeck();
+  const players = [];
+  for (let i = 0; i < numPlayers; i++) {
+    players.push({ name: NAMES[i], hand: deck.splice(0, 5), alive: true, isHuman: i === 0 });
+  }
+  G = { players, deck, total: 0, currentPlayer: 0, direction: 1, log: [], lastPlayed: null, numPlayers, gameOver: false, winner: -1 };
+  addLog('遊戲開始！');
+  render();
+}
+
+function addLog(msg) {
+  G.log.push(msg);
+  if (G.log.length > 50) G.log.shift();
+}
+
+function nextAlive(from, dir) {
+  let idx = from;
+  for (let i = 0; i < G.numPlayers; i++) {
+    idx = (idx + dir + G.numPlayers) % G.numPlayers;
+    if (G.players[idx].alive) return idx;
+  }
+  return -1;
+}
+
+function aliveCount() { return G.players.filter(p => p.alive).length; }
+
+function calcNewTotal(total, card, chosenValue) {
+  if (card.rank === 'K') return 99;
+  if (card.rank === '4') return total;
+  if (card.rank === 'J' || card.rank === 'Q') return total;
+  if (chosenValue !== undefined) return total + chosenValue;
+  return total + cardValue(card.rank);
+}
+
+function drawCard(player) {
+  if (G.deck.length > 0) {
+    player.hand.push(G.deck.pop());
+  }
+}
+
+function playCard(playerIdx, cardIdx, chosenValue, targetIdx) {
+  const p = G.players[playerIdx];
+  const card = p.hand[cardIdx];
+  const newTotal = calcNewTotal(G.total, card, chosenValue);
+
+  if (newTotal > 99) {
+    // Bust!
+    p.alive = false;
+    sfxBust();
+    addLog(p.name + ' 出了 ' + card.rank + card.suit + '，累計超過 99，淘汰！');
+    p.hand.splice(cardIdx, 1);
+    G.lastPlayed = card;
+
+    if (aliveCount() <= 1) {
+      G.gameOver = true;
+      const winner = G.players.find(x => x.alive);
+      G.winner = G.players.indexOf(winner);
+      addLog((winner ? winner.name : '???') + ' 獲勝！');
+      render();
+      setTimeout(() => {
+        sfxWin();
+        document.getElementById('gameOverText').textContent = (winner.isHuman ? '恭喜你贏了！' : winner.name + ' 獲勝！');
+        document.getElementById('gameOverSub').textContent = winner.isHuman ? '太厲害了 🎉' : '下次再加油 💪';
+        document.getElementById('gameOverModal').classList.add('show');
+      }, 600);
+      return;
+    }
+    // Move to next player
+    G.currentPlayer = nextAlive(playerIdx, G.direction);
+    render();
+    scheduleAI();
+    return;
+  }
+
+  sfxPlay();
+  G.total = newTotal;
+  G.lastPlayed = card;
+  p.hand.splice(cardIdx, 1);
+  drawCard(p);
+
+  let extra = '';
+  if (card.rank === 'A') extra = ' (' + (chosenValue > 0 ? '+' : '') + chosenValue + ')';
+  if (card.rank === '10') extra = ' (' + (chosenValue > 0 ? '+' : '') + chosenValue + ')';
+  if (card.rank === 'K') extra = ' (=> 99)';
+  addLog(p.name + ' 出了 ' + card.rank + card.suit + extra + '，累計: ' + G.total);
+
+  // Special effects
+  if (card.rank === '4') {
+    G.direction *= -1;
+    if (G.numPlayers > 2) addLog('出牌方向反轉！');
+  }
+
+  if (card.rank === '5' && targetIdx !== undefined && targetIdx !== null) {
+    G.currentPlayer = targetIdx;
+    addLog('指定 ' + G.players[targetIdx].name + ' 出牌！');
+  } else {
+    G.currentPlayer = nextAlive(playerIdx, G.direction);
+  }
+
+  render();
+  scheduleAI();
+}
+
+function scheduleAI() {
+  if (G.gameOver) return;
+  const cp = G.players[G.currentPlayer];
+  if (!cp.isHuman && cp.alive) {
+    setTimeout(() => aiPlay(G.currentPlayer), 600 + Math.random() * 400);
+  }
+}
+
+// AI
+function aiPlay(idx) {
+  if (G.gameOver) return;
+  const p = G.players[idx];
+  if (!p.alive || p.isHuman) return;
+
+  const hand = p.hand;
+  const t = G.total;
+
+  // Evaluate each card
+  const options = [];
+  for (let i = 0; i < hand.length; i++) {
+    const c = hand[i];
+    if (c.rank === 'K') {
+      options.push({ idx: i, value: undefined, newTotal: 99, priority: t >= 90 ? 100 : -10 });
+    } else if (c.rank === 'J' || c.rank === 'Q') {
+      options.push({ idx: i, value: undefined, newTotal: t, priority: t >= 80 ? 60 : 5 });
+    } else if (c.rank === '4') {
+      options.push({ idx: i, value: undefined, newTotal: t, priority: t >= 80 ? 55 : 3 });
+    } else if (c.rank === '5') {
+      options.push({ idx: i, value: undefined, newTotal: t, priority: t >= 85 ? 50 : 4 });
+    } else if (c.rank === 'A') {
+      if (t + 1 <= 99) options.push({ idx: i, value: 1, newTotal: t+1, priority: t >= 80 ? 30 : 10 });
+      if (t + 11 <= 99) options.push({ idx: i, value: 11, newTotal: t+11, priority: t < 70 ? 20 : -5 });
+    } else if (c.rank === '10') {
+      if (t + 10 <= 99) options.push({ idx: i, value: 10, newTotal: t+10, priority: t < 70 ? 15 : -5 });
+      if (t - 10 >= 0) options.push({ idx: i, value: -10, newTotal: t-10, priority: t >= 80 ? 70 : 5 });
+      else options.push({ idx: i, value: -10, newTotal: t-10, priority: t >= 80 ? 70 : 5 });
+    } else {
+      const v = cardValue(c.rank);
+      if (t + v <= 99) {
+        const pri = t < 70 ? v : (99 - t - v >= 0 ? -v : -100);
+        options.push({ idx: i, value: undefined, newTotal: t+v, priority: pri });
+      } else {
+        options.push({ idx: i, value: undefined, newTotal: t+v, priority: -200 });
+      }
+    }
+  }
+
+  // Filter safe options
+  let safe = options.filter(o => o.newTotal <= 99);
+  if (safe.length === 0) safe = options; // forced bust
+
+  // Add randomness
+  safe.forEach(o => o.priority += (Math.random() - 0.5) * 15);
+  safe.sort((a, b) => b.priority - a.priority);
+
+  const choice = safe[0];
+  const card = hand[choice.idx];
+
+  // If card is 5, pick a target
+  let target = undefined;
+  if (card.rank === '5') {
+    // Pick next alive non-self, preferring human
+    const candidates = [];
+    for (let i = 0; i < G.numPlayers; i++) {
+      if (i !== idx && G.players[i].alive) candidates.push(i);
+    }
+    if (candidates.length > 0) {
+      // Prefer human if total is high
+      if (G.total >= 85 && candidates.includes(0)) target = 0;
+      else target = candidates[Math.floor(Math.random() * candidates.length)];
+    } else {
+      target = nextAlive(idx, G.direction);
+    }
+  }
+
+  playCard(idx, choice.idx, choice.value, target);
+}
+
+// Render
+function render() {
+  const app = document.getElementById('app');
+  let html = '';
+
+  // Top bar
+  html += '<div class="top-bar"><h1>99 撲克牌</h1><div class="controls">';
+  html += '<button class="btn" onclick="showSetup()">新遊戲</button>';
+  html += '</div></div>';
+
+  html += '<div class="game-area">';
+
+  // Computer players (top)
+  for (let i = 1; i < G.numPlayers; i++) {
+    const p = G.players[i];
+    const isCurrent = G.currentPlayer === i && !G.gameOver;
+    html += '<div class="player-zone' + (p.alive ? '' : ' eliminated') + '">';
+    html += '<div class="player-label"><span class="dot ' + (p.alive ? (isCurrent ? 'active' : 'waiting') : 'dead') + '"></span>' + p.name + (p.alive ? '' : ' (淘汰)') + '</div>';
+    html += '<div class="hand">';
+    for (let j = 0; j < p.hand.length; j++) {
+      html += '<div class="card card-back" style="border-radius:8px"></div>';
+    }
+    html += '</div></div>';
+  }
+
+  // Center
+  const dangerClass = G.total >= 90 ? 'critical' : G.total >= 80 ? 'danger' : '';
+  html += '<div class="center-area">';
+  html += '<div class="played-area">';
+  if (G.lastPlayed) {
+    const red = isRed(G.lastPlayed.suit);
+    html += '<div class="card card-front ' + (red ? 'red' : 'black') + '" style="border-radius:8px"><span class="rank">' + G.lastPlayed.rank + '</span><span class="suit">' + G.lastPlayed.suit + '</span></div>';
+  }
+  html += '</div>';
+  html += '<div class="total-display"><div class="total-number ' + dangerClass + '">' + G.total + '</div><div class="total-label">累計點數</div></div>';
+  html += '<div class="direction">' + (G.direction === 1 ? '➡️' : '⬅️') + '</div>';
+  html += '<div class="deck">' + G.deck.length + '<br>張</div>';
+  html += '</div>';
+
+  // Player (bottom)
+  const me = G.players[0];
+  const myTurn = G.currentPlayer === 0 && !G.gameOver && me.alive;
+  html += '<div class="player-zone' + (me.alive ? '' : ' eliminated') + '">';
+  html += '<div class="player-label"><span class="dot ' + (me.alive ? (myTurn ? 'active' : 'waiting') : 'dead') + '"></span>' + me.name + (me.alive ? '' : ' (淘汰)') + (myTurn ? ' - 輪到你出牌' : '') + '</div>';
+  html += '<div class="hand player-hand">';
+  for (let j = 0; j < me.hand.length; j++) {
+    const c = me.hand[j];
+    const red = isRed(c.suit);
+    const clickable = myTurn ? ' onclick="humanPlay(' + j + ')"' : '';
+    html += '<div class="card card-front ' + (red ? 'red' : 'black') + '"' + clickable + ' style="border-radius:8px"><span class="rank">' + c.rank + '</span><span class="suit">' + c.suit + '</span></div>';
+  }
+  html += '</div></div>';
+
+  // Log
+  html += '<div class="log-area" id="logArea">';
+  for (const l of G.log) html += '<div>' + l + '</div>';
+  html += '</div>';
+
+  html += '</div>';
+  app.innerHTML = html;
+
+  // Scroll log
+  const la = document.getElementById('logArea');
+  if (la) la.scrollTop = la.scrollHeight;
+}
+
+function humanPlay(cardIdx) {
+  if (G.gameOver || G.currentPlayer !== 0) return;
+  const card = G.players[0].hand[cardIdx];
+
+  if (card.rank === 'A') {
+    showChoice('A 要加多少？', [
+      { label: '+1', value: 1 },
+      { label: '+11', value: 11 }
+    ], (val) => checkFiveTarget(cardIdx, val));
+  } else if (card.rank === '10') {
+    showChoice('10 要加多少？', [
+      { label: '+10', value: 10 },
+      { label: '-10', value: -10 }
+    ], (val) => checkFiveTarget(cardIdx, val));
+  } else if (card.rank === '5') {
+    showTargetChoice(0, (target) => {
+      playCard(0, cardIdx, undefined, target);
+    });
+  } else {
+    playCard(0, cardIdx, undefined, undefined);
+  }
+}
+
+function showChoice(title, options, cb) {
+  const modal = document.getElementById('choiceModal');
+  document.getElementById('choiceTitle').textContent = title;
+  const btns = document.getElementById('choiceButtons');
+  btns.innerHTML = '';
+  for (const o of options) {
+    const b = document.createElement('button');
+    b.className = 'choice-btn';
+    b.textContent = o.label;
+    b.onclick = () => { modal.classList.remove('show'); cb(o.value); };
+    btns.appendChild(b);
+  }
+  modal.classList.add('show');
+}
+
+function showTargetChoice(fromIdx, cb) {
+  const modal = document.getElementById('targetModal');
+  const btns = document.getElementById('targetButtons');
+  btns.innerHTML = '';
+  for (let i = 0; i < G.numPlayers; i++) {
+    if (i !== fromIdx && G.players[i].alive) {
+      const b = document.createElement('button');
+      b.className = 'target-btn';
+      b.textContent = G.players[i].name;
+      b.onclick = () => { modal.classList.remove('show'); cb(i); };
+      btns.appendChild(b);
+    }
+  }
+  modal.classList.add('show');
+}
+
+function checkFiveTarget(cardIdx, chosenValue) {
+  const card = G.players[0].hand[cardIdx];
+  if (card.rank === '5') {
+    showTargetChoice(0, (target) => playCard(0, cardIdx, chosenValue, target));
+  } else {
+    playCard(0, cardIdx, chosenValue, undefined);
+  }
+}
+
+// Setup screen
+function showSetup() {
+  document.getElementById('gameOverModal').classList.remove('show');
+  document.getElementById('choiceModal').classList.remove('show');
+  document.getElementById('targetModal').classList.remove('show');
+  const app = document.getElementById('app');
+  app.innerHTML = '<div class="setup-screen"><h1>99 撲克牌</h1><p class="subtitle">台灣經典撲克牌遊戲</p><div class="mode-buttons"><button class="mode-btn" onclick="startGame(2)">2 人</button><button class="mode-btn" onclick="startGame(3)">3 人</button><button class="mode-btn" onclick="startGame(4)">4 人</button></div><p class="subtitle" style="margin-top:12px;font-size:0.8rem;opacity:0.5">1 位玩家 vs 電腦對手</p></div>';
+}
+
+showSetup();
+</script>
+</body>
+</html>
